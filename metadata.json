@@ -1,0 +1,15 @@
+{
+  "name": "RenTer",
+  "description": "Global peer-to-peer rental marketplace with real-time location, smart AI suggestions, and secure double-confirmation booking workflow.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "Real-time Location System",
+    "AI Smart Assistant",
+    "Double-Confirmation Bookings",
+    "Chat-based Negotiations",
+    "Automated Billing"
+  ]
+}

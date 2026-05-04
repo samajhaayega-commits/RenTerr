@@ -1,0 +1,158 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { 
+      return isSignedIn() && (
+        request.auth.token.email_verified == true || 
+        request.auth.token.firebase.sign_in_provider == 'phone'
+      );
+    }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    function isAdmin() { 
+      return isSignedIn() && (
+        request.auth.token.email == 'kamleshgehlot210@gmail.com' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    // --- Validation Helpers ---
+    function isValidUser(data) {
+      return data.uid == request.auth.uid &&
+             data.role in ['user', 'admin'] &&
+             data.trustScore is number &&
+             data.trustScore >= 0 && data.trustScore <= 100 &&
+             (!('isRestricted' in data) || data.isRestricted is bool);
+    }
+
+    function isValidItem(data) {
+      return data.ownerId == request.auth.uid &&
+             data.title is string && data.title.size() <= 100 &&
+             data.status in ['pending_approval', 'active', 'inactive'];
+    }
+
+    function isValidBooking(data) {
+      return data.renterId == request.auth.uid &&
+             data.ownerId is string &&
+             data.itemId is string &&
+             data.status is string;
+    }
+
+    function isValidConversation(data) {
+      return request.auth.uid in data.participants &&
+             data.participants.size() >= 2;
+    }
+
+    function isValidMessage(data) {
+      return data.senderId == request.auth.uid &&
+             data.text is string && 
+             data.text.size() <= 5000;
+    }
+
+    function isValidTransaction(data) {
+      return data.userId == request.auth.uid &&
+             data.amount is number &&
+             data.bookingId is string;
+    }
+
+    // --- Collection Matches ---
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isOwner(userId) && isValidUser(incoming()) && (
+        (incoming().role == 'admin' && request.auth.token.email == 'kamleshgehlot210@gmail.com') ||
+        (incoming().role == 'user')
+      );
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (isOwner(userId) && 
+         !incoming().diff(existing()).affectedKeys().hasAny(['role', 'isRestricted', 'uid', 'email', 'createdAt']))
+      );
+    }
+
+    match /items/{itemId} {
+      allow get: if true;
+      allow list: if true; // Public marketplace
+      allow create: if isVerified() && isValidItem(incoming());
+      allow update: if isSignedIn() && (
+        (isOwner(existing().ownerId) && incoming().ownerId == existing().ownerId && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'price', 'pricePerDay', 'images', 'status', 'location', 'category'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin() || (isSignedIn() && isOwner(existing().ownerId));
+    }
+
+    match /bookings/{bookingId} {
+      allow get: if isSignedIn() && (isOwner(existing().ownerId) || isOwner(existing().renterId) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || resource.data.renterId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidBooking(incoming());
+      allow update: if isSignedIn() && (
+        ((isOwner(existing().ownerId) || isOwner(existing().renterId)) &&
+         incoming().ownerId == existing().ownerId &&
+         incoming().renterId == existing().renterId &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'rating', 'review', 'bill', 'returnInspection'])) ||
+        isAdmin()
+      );
+    }
+
+    match /conversations/{chatId} {
+      allow get: if isSignedIn() && (request.auth.uid in existing().participants || isAdmin());
+      allow list: if isSignedIn() && (request.auth.uid in resource.data.participants || isAdmin());
+      allow create: if isSignedIn() && isValidConversation(incoming());
+      allow update: if isSignedIn() && (request.auth.uid in existing().participants || isAdmin()) &&
+                      incoming().participants == existing().participants &&
+                      incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'updatedAt', 'unreadCount']);
+      
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && (request.auth.uid in get(/databases/$(database)/documents/conversations/$(chatId)).data.participants || isAdmin());
+        allow list: if isSignedIn() && (request.auth.uid in get(/databases/$(database)/documents/conversations/$(chatId)).data.participants || isAdmin());
+        allow create: if isSignedIn() && isValidMessage(incoming());
+      }
+    }
+
+    match /transactions/{txId} {
+      allow get: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidTransaction(incoming());
+    }
+
+    match /audit_logs/{logId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin();
+    }
+
+    match /security_alerts/{alertId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin();
+      allow update: if isAdmin();
+    }
+
+    match /disputes/{disputeId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin() || isOwner(existing().userId);
+    }
+
+    match /admin_logs/{logId} {
+      allow create, read: if isAdmin();
+    }
+
+    match /system_backups/{backupId} {
+      allow read, write: if isAdmin();
+      match /snapshots/{snapId} {
+        allow read, write: if isAdmin();
+      }
+    }
+  }
+}

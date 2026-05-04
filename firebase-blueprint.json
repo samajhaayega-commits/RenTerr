@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Core user profile data including security status",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "trustScore": { "type": "number" },
+        "isRestricted": { "type": "boolean" },
+        "outstandingBalance": { "type": "number" },
+        "deviceId": { "type": "string" }
+      },
+      "required": ["uid", "role", "trustScore"]
+    },
+    "Item": {
+      "title": "Rental Item",
+      "description": "Item metadata and status",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending_approval", "active", "inactive"] }
+      }
+    },
+    "Booking": {
+      "title": "Rental Transaction",
+      "description": "Escrow and status data for rentals",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "renterId": { "type": "string" },
+        "depositHeld": { "type": "number" },
+        "itemId": { "type": "string" },
+        "totalCost": { "type": "number" }
+      }
+    },
+    "Conversation": {
+      "title": "Chat Conversation",
+      "description": "Metadata for a chat thread",
+      "type": "object",
+      "properties": {
+        "participants": { "type": "array" },
+        "bookingId": { "type": "string" },
+        "itemId": { "type": "string" },
+        "lastMessage": { "type": "string" }
+      }
+    },
+    "Message": {
+      "title": "Chat Message",
+      "description": "Individual message in a conversation",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "type": { "type": "string" }
+      }
+    },
+    "Transaction": {
+      "title": "Escrow Transaction",
+      "description": "Payment and refund records",
+      "type": "object",
+      "properties": {
+        "bookingId": { "type": "string" },
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string" },
+        "type": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Global users"
+    },
+    "/items/{itemId}": {
+      "schema": "Item",
+      "description": "Rental listings"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Active rentals"
+    },
+    "/conversations/{chatId}": {
+      "schema": "Conversation",
+      "description": "Chat threads"
+    },
+    "/conversations/{chatId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Chat messages"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Financial records"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "object",
+      "description": "System audit logs"
+    },
+    "/security_alerts/{alertId}": {
+      "schema": "object",
+      "description": "Security alerts"
+    }
+  }
+}
